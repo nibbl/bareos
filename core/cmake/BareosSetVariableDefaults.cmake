@@ -654,62 +654,60 @@ else()
   set(DO_STATIC_CODE_CHECKS OFF)
 endif()
 
-if(NOT DEFINED changer-device0)
-  set(changer-device0 "/dev/tape/by-id/scsi-SSTK_L700_XYZZY_A")
-  set(default_changer0 TRUE)
+if(DEFINED changer-device)
+  execute_process(
+    COMMAND ls "${changer-device}"
+    RESULT_VARIABLE changer_device0_exists
+    OUTPUT_QUIET ERROR_QUIET
+  )
 endif()
 
-execute_process(
-  COMMAND "ls ${changer-device0}"
-  RESULT_VARIABLE changer_device0_exists
-  OUTPUT_QUIET ERROR_QUIET
-)
-if(NOT changer_device0_exists)
-  message(STATUS "Could not find changer-device \"${changer-device0}\"")
+if(NOT ${changer_device0_exists} EQUAL 0)
+  message(STATUS "Error: Could not find changer-device \"${changer-device}\"")
   set(error_changer0 TRUE)
 endif()
 
-if(NOT DEFINED tape-devices0)
-  list(APPEND tape-devices0 "/dev/tape/by-id/scsi-XYZZY_A1-nst"
-       "/dev/tape/by-id/scsi-XYZZY_A2-nst" "/dev/tape/by-id/scsi-XYZZY_A3-nst"
-       "/dev/tape/by-id/scsi-XYZZY_A4-nst"
-  )
-  set(default_tape_devices0 TRUE)
+if(DEFINED tape-devices)
+  list(LENGTH tape-devices number_of_tape_devices)
+  if(number_of_tape_devices EQUAL 0)
+    message(STATUS "Error: list of tape-devices is empty")
+    set(error_tape_devices0 TRUE)
+  else()
+    foreach(device ${tape-devices})
+      execute_process(
+        COMMAND ls "${device}"
+        RESULT_VARIABLE tape_device_exists
+        OUTPUT_QUIET ERROR_QUIET
+      )
+      if(NOT "${tape_device_exists}" EQUAL "0")
+        message(STATUS "Error: Could not find tape-device \"${device}\"")
+        set(error_tape_devices0 TRUE)
+      endif()
+    endforeach()
+  endif()
 endif()
 
-foreach(device ${tape-devices0})
-  execute_process(
-    COMMAND "ls ${device}"
-    RESULT_VARIABLE tape_device_exists
-    OUTPUT_QUIET ERROR_QUIET
-  )
-  if(NOT tape_device_exists)
-    message(STATUS "Could not find tape-device \"${device}\"")
-    set(error_tape_devices0 TRUE)
-  endif()
-endforeach()
-
-if(default_changer0 AND default_tape_devices0)
-  if(error_changer0 OR error_tape_devices0)
-    message(
-      STATUS
-        "Disabling autochanger test because one or more default devices were not found."
-    )
-  else()
-    set(autochanger_devices_found TRUE)
-  endif()
-elseif(NOT default_changer0 AND NOT default_tape_devices0)
-  if(error_changer0 OR error_tape_devices0)
-    message(
-      FATAL_ERROR "Could not find one or more devices for autochanger test."
-    )
-  else()
-    set(autochanger_devices_found TRUE)
-  endif()
-else()
+if(DEFINED changer-device AND NOT DEFINED tape-devices)
   message(
-    FATAL_ERROR "Cannot use default and non default devices at the same time."
+    STATUS "Error: Changer device defined but no tape device defined"
   )
+  set(error_odd_devices TRUE)
+elseif(NOT DEFINED changer-device AND DEFINED tape-devices)
+  message(
+    STATUS "Error: Tape device defined but no changer device defined"
+  )
+  set(error_odd_devices TRUE)
+endif()
+
+if(error_not_defined OR error_changer0 OR error_tape_devices0 OR error_odd_devices)
+  set(changer_example "-D changer-device=\"/dev/tape/by-id/scsi-SSTK_L700_XYZZY_A\"")
+  set(tape_example "-D tape-devices=\"/dev/tape/by-id/scsi-XYZZY_A1-nst;/dev/tape/by-id/scsi-XYZZY_A2-nst;/dev/tape/by-id/scsi-XYZZY_A3-nst;/dev/tape/by-id/scsi-XYZZY_A4-nst\"")
+  message(
+    FATAL_ERROR "Errors occurred during cmake run for autochanger test (see above).\n\nUse this Example as guideline:
+    ${changer_example} ${tape_example}\n"
+  )
+else()
+  set(autochanger_devices_found TRUE)
 endif()
 
 if(autochanger_devices_found)
@@ -718,11 +716,11 @@ if(autochanger_devices_found)
       PARENT_SCOPE
   )
   set(CHANGER_DEVICE0
-      ${changer-device0}
+      ${changer-device}
       PARENT_SCOPE
   )
 
-  list(JOIN tape-devices0 "\" \"" joined_tape_devices_0)
+  list(JOIN tape-devices "\" \"" joined_tape_devices_0)
   set(TAPE_DEVICES0
       "\"${joined_tape_devices_0}\""
       PARENT_SCOPE
